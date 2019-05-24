@@ -2,7 +2,9 @@
 Bulk uploads photos from a local folder to Google Photos. Uses a specified album to categorise the photos.
 Progress of upload is stored locally.
 Meant for uploading large numbers of files - personally used it to upload more than 60,000 photos.
+
 ---
+## Usage
 usage: gp.py [-h] [-i IMAGEDIR] [-a ALBUMNAME] [-x] [-c] [-u] [-v] [-m MAXSIZE]
 
  -h, --help            show this help message and exit
@@ -26,4 +28,12 @@ usage: gp.py [-h] [-i IMAGEDIR] [-a ALBUMNAME] [-x] [-c] [-u] [-v] [-m MAXSIZE]
   
   -m MAXSIZE, --maxsize MAXSIZE
                         Max file size to upload (MB), default=-1 (no limit)
+
 ---
+
+## Deployment
+This is a command line tool.
+Download and create a virtual environment:
+- mkvirtualenv -p python3 googlephotos
+- pip install -r requirements.txt
+- python ./gp.py -?

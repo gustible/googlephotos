@@ -2,6 +2,7 @@
 
 import os, sqlite3, json, sys, time
 
+from inspect import getsourcefile
 from datetime import datetime
 from google.auth.transport.requests import AuthorizedSession
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -16,6 +17,8 @@ SCOPES = [
 CLIENT_SECRET_FILE = 'credentials.json'
 API_SERVICE_NAME = 'photoslibrary.googleapis.com'
 API_VERSION = 'v1'
+# DATABASE_PATH = '/home/jacques/workspace/googlephotos/GDriveimages'
+DATABASE_NAME= 'GDriveimages'
 
 
 class CriticalException(Exception):
@@ -393,7 +396,8 @@ if __name__ == '__main__':
     print("Verbose              :{}".format(args.verbose))
 
     try:
-        connsql = sqlite3.connect('/home/jacques/workspace/googlephotos/GDriveimages')
+        db_path = "{}/{}".format(os.path.dirname(getsourcefile(lambda:0)), DATABASE_NAME)
+        connsql = sqlite3.connect(db_path)
         main()
 
     except Exception:

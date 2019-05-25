@@ -202,8 +202,6 @@ def upload_file(authed_session, album_id, file_name):
     :return: True if saved OK, new item id, and album id (which may have been modified)
     """
 
-    album_id = increment_album_name(authed_session)
-
     # Upload the file
     f = open(file_name,'rb').read()
     if len(f) == 0:

@@ -56,7 +56,7 @@ To update the database of all files that must be uploaded, showing verbose
 messages use: `python ./gp.py -c -v`
 
 __Notes:__
-- The script will ONLY upload files with a JPG extension.
+- The script will ONLY upload files with a JPG extension (it is not case sensitive).
 - The SQLite database is called GDriveimages, and is created in the folder where the script is run
 
 

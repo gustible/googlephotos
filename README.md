@@ -58,7 +58,7 @@ messages use: `python ./gp.py -c -v`
 __Notes:__
 - The script will ONLY upload files with a JPG extension (it is not case sensitive).
 - The script can easily be modified to accommodate other files, the JPG limitation is just a personal requirement
-- The SQLite database is called GDriveimages, and is created in the folder where the script is run
+- The SQLite database is called GDriveimages, and is created in the folder where the script is located
 
 
 ---

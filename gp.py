@@ -20,13 +20,25 @@ API_VERSION = 'v1'
 # DATABASE_PATH = '/home/jacques/workspace/googlephotos/GDriveimages'
 DATABASE_NAME= 'GDriveimages'
 
+# region Custom Exceptions
 
-class CriticalException(Exception):
+
+class CriticalError(Exception):
     pass
 
 
-class IgnoreFileException(Exception):
+class IgnoreFileError(Exception):
     pass
+
+
+class AlbumFullError(Exception):
+    pass
+
+
+class UploadError(Exception):
+    pass
+
+# endregion Custom Exceptions
 
 
 def print_message(message):
@@ -64,9 +76,9 @@ def create_album(album_name, authed_session):
     try:
         response = authed_session.post(url, data=json.dumps(payload))
     except Exception as e:
-        raise CriticalException(e)
+        raise CriticalError(e)
     if response.status_code != 200:
-        raise CriticalException("Could not create album:{}".format(response.text))
+        raise CriticalError("Could not create album:{}".format(response.text))
     return json.loads(response.text)["id"]
 
 
@@ -106,22 +118,32 @@ def increment_album_name(authed_session):
         c.execute(sql)
         connsql.commit()
     except Exception as e:
-        raise CriticalException(e)
+        raise CriticalError(e)
     print_message("Incremented album - new album is:{}".format(album_name))
     return album_id, album_name
 
 
-def create_album_name(authed_session):
+def check_album_item_count(authed_session, album_id):
+    url = "https://photoslibrary.googleapis.com/v1/albums/{}".format(album_id)
+    response = authed_session.get(url)
+    if response.status_code != 200:
+        raise CriticalError("Unable to retrieve album list:{}".format(response.text))
+    result = json.loads(response.text)
+    return int(result["mediaItemsCount"])
+
+
+def set_up_album(authed_session):
     """
-    Creates a backup album - this may either be at initialisation of the process or when the album name
+    Sets up the  album - either creates it or creates a new album when the mediacount is over 20000
     is "incremented" when the media count exceeds 20000 (the limit imposed by Google)
+    This will first check the album size - if it is large than 20000 it will be incremented.
+    The process tracks the file count and will increment as needed
     :param authed_session:
     :return: album_id, album_name
     """
 
     album_name, album_id = get_active_album_name()
-    print_message("Using album:{}".format(album_name))
-
+    album_count = 0
     if not album_id:
         # Album was not found, create it.
         album_id = create_album(album_name, authed_session)
@@ -131,8 +153,15 @@ def create_album_name(authed_session):
             c.execute("INSERT INTO albumname (album_name, increment, google_id) VALUES (?,?,?)", sql_parameters)
             connsql.commit()
         except Exception as e:
-            raise CriticalException(e)
-    return album_id, album_name
+            raise CriticalError(e)
+    else:
+        album_count = check_album_item_count(authed_session, album_id)
+        if album_count >= 20000:
+            album_id, album_name = increment_album_name(authed_session)
+            album_count = 0
+        print_message("Using album:{}".format(album_name))
+
+    return album_id, album_name, album_count
 
 
 def set_file_status(rowid, google_id):
@@ -208,7 +237,7 @@ def upload_file(authed_session, album_id, file_name):
     # Upload the file
     f = open(file_name,'rb').read()
     if len(f) == 0:
-        raise IgnoreFileException("This file is zero length:{}".format(file_name))
+        raise IgnoreFileError("This file is zero length:{}".format(file_name))
     headers = {
         'Content-type': 'application/octet-stream',
         'X-Goog-Upload-File-Name': os.path.basename(file_name),
@@ -217,7 +246,7 @@ def upload_file(authed_session, album_id, file_name):
     url = "https://photoslibrary.googleapis.com/v1/uploads"
     response = authed_session.post(url, headers=headers, data=f)
     if response.status_code != 200:
-        raise IgnoreFileException("Upload failed:{}".format(response.text))
+        raise IgnoreFileError("Upload failed:{}".format(response.text))
     # Add it to an album
     url = "https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate"
     upload_token = str(response.content, 'utf-8')
@@ -234,19 +263,17 @@ def upload_file(authed_session, album_id, file_name):
     response = authed_session.post(url, data=json.dumps(payload))
     new_media_item_results = json.loads(response.content)['newMediaItemResults'][0]
 
-    if new_media_item_results["status"]["message"] == "OK":
-        id = new_media_item_results["mediaItem"]["id"]
+    if new_media_item_results["status"]["message"] == "Success":
+        item_id = new_media_item_results["mediaItem"]["id"]
     elif new_media_item_results["status"]["code"] == 8: #8 means ERR_PHOTO_PER_ALBUM_LIMIT
-        if args.dontincrementalbum:
-            return
-        album_id = increment_album_name(authed_session)
+        raise AlbumFullError("Album Full")
     else:
-        id = None
-        print_message("Upload Failed: {}".format(new_media_item_results["status"]))
-    return new_media_item_results["status"]["message"] =="OK", id, album_id
+        item_id = None
+        raise UploadError("Unhandled status error:{}".format(new_media_item_results["status"]))
+    return new_media_item_results["status"]["message"] =="Success", item_id, album_id
 
 
-def upload_files(authed_session, album_id, album_name):
+def upload_files(authed_session, album_id, album_name, album_count):
     """
     Uploads all files in the database that are marked as having no Google ID
     :return:
@@ -270,13 +297,34 @@ def upload_files(authed_session, album_id, album_name):
                     set_file_status(row[0], id)
                     count += 1
                     print_message("({0}/{1}) uploaded:: {2}".format(count, len(l), row[1]))
+                    if album_count + count >= 20000:
+                        raise AlbumFullError()
                 else:
                     print_message("Failed to upload {}".format(row[1]))
-        except IgnoreFileException as e:
+        except AlbumFullError as e:
+            print("Album full - incrementing album name NOW")
+            if args.dontincrementalbum:
+                raise CriticalError("Album limit reached but dontincrementalbum flag is set. Cannot continue upload")
+            album_id, album_name = increment_album_name(authed_session)
+        except IgnoreFileError as e:
             print("Ignoring file {0} with error: \'{1}\'".format(row[1], e))
+        except OSError as e:
+            print("Skipping: OSError ignored for file: {0}. Error:{1}").format(row[1], e)
+        except UploadError as e:
+            raise e
 
-        except OSError:
-            print("Skipping: OSError ignored for file: {0}").format(row[1])
+
+def list_albums(authed_session):
+    url = "https://photoslibrary.googleapis.com/v1/albums"
+    response = authed_session.get(url)
+    if response.status_code != 200:
+        raise CriticalError("Unable to retrieve album list:{}".format(response.text))
+    result = json.loads(response.text)
+    albums = result["albums"]
+    for a in albums:
+        print("title:{}".format(a["title"]))
+        print("mediaItemsCount:{}".format(a["mediaItemsCount"]))
+        print("id:{}".format(a["id"]))
 
 
 # region Token Management
@@ -289,8 +337,6 @@ def get_oauth_credentials():
     flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
     credentials = flow.run_console()
     return credentials
-
-
 
 
 def store_token(credentials):
@@ -336,26 +382,30 @@ def read_credentials():
 
 def main():
 
+    if args.listalbums:
+        authed_session = get_authed_session()
+        list_albums(authed_session)
+
     if args.check:
         check_files(args.imagedir)
 
     if args.upload:
         create_database_structure()
         authed_session = get_authed_session()
-        album_id, album_name = create_album_name(authed_session)
+        album_id, album_name, album_count = set_up_album(authed_session)
 
         rcount = 0
         while True:
             try:
-                upload_files(authed_session, album_id, album_name)
-            except CriticalException:
-                print("Critical Exception occurred: {0}".format(sys.exc_info()[1]))
+                upload_files(authed_session, album_id, album_name, album_count)
+            except CriticalError as e:
+                print("Critical Exception occurred: {0}".format(e))
                 print(">>> Sorry - that was a critical error. Please sort it out and try again")
                 break
-            except Exception:
+            except Exception as e:
                 # Simple retry - MAY resolve transient connectivity issue.
                 rcount += 1
-                print("Exception occurred: {0}".format(sys.exc_info()[1]))
+                print("Exception occurred: {0}".format(e))
                 print ("Retry #{0} of 10  in {1} second(s)".format(rcount, rcount*2))
                 time.sleep(rcount*2)
                 if rcount > 9:
@@ -372,7 +422,7 @@ parser = argparse.ArgumentParser(description="A collection of utilities for C2S"
 
 parser.add_argument("-i", "--imagedir", default="/media/jacques/FILESTORE/Pictures", help="Specify root image directory")
 parser.add_argument("-a", "--albumname", default="Backup from Local", help="Specify Google Photos album")
-parser.add_argument("-x", "--dontincrementalbum", action="store_false", help="Auto increment album name for large albums")
+parser.add_argument("-x", "--dontincrementalbum", action="store_true", help="Auto increment album name for large albums")
 parser.add_argument("-c", "--check", action="store_true",
                     help="Walk local folder and update database of files, mark new files for upload. \
                        Files are NOT uploaded unless -u is True. The folder is first walked, then uploaded.")
@@ -380,6 +430,7 @@ parser.add_argument("-u", "--upload", action="store_true", help="Upload images t
 parser.add_argument("-v", "--verbose", action="store_true", help="Provide verbose messaging")
 parser.add_argument("-m", "--maxsize", type=int, default=-1,
                     help="Max file size to upload (MB), default=-1 (no limit)")
+parser.add_argument("--listalbums", action="store_true", help="List all albums and exit")
 
 args = parser.parse_args()
 
@@ -387,13 +438,16 @@ args = parser.parse_args()
 
 if __name__ == '__main__':
     print("\nRunning with options:")
-    print("Imagedir             :{}".format(args.imagedir))
-    print("Album Name           :{}".format(args.albumname))
-    print("Increment Album      :{}".format(args.dontincrementalbum))
-    print("Upload               :{}".format(args.upload))
-    print("Check                :{}".format(args.check))
-    print("MaxSize (MB)         :{}".format(args.maxsize))
-    print("Verbose              :{}".format(args.verbose))
+    if args.listalbums:
+        print("Listing albums and exiting")
+    else:
+        print("Imagedir             :{}".format(args.imagedir))
+        print("Album Name           :{}".format(args.albumname))
+        print("Increment Album      :{}".format(args.dontincrementalbum))
+        print("Upload               :{}".format(args.upload))
+        print("Check                :{}".format(args.check))
+        print("MaxSize (MB)         :{}".format(args.maxsize))
+        print("Verbose              :{}".format(args.verbose))
 
     try:
         db_path = "{}/{}".format(os.path.dirname(getsourcefile(lambda:0)), DATABASE_NAME)

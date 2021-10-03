@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import os, sqlite3, json, sys, time
 
@@ -209,7 +209,12 @@ def check_files(local_dir):
             ext = os.path.splitext(f)[1].upper()
             if ext in [".JPG"]:
                 filepath = os.path.join(dirpath, f)
-                store_file_details(filepath)
+                if local_dir[-1] != '/':
+                    f_path = filepath.replace("{}/".format(local_dir), '', 1)
+                else:
+                    f_path = filepath.replace(local_dir, '', 1)
+                print(f_path)  # Remove the path to the image dir
+                store_file_details(f_path)
 
 
 def get_authed_session():
@@ -219,6 +224,7 @@ def get_authed_session():
     """
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
     credentials = read_credentials()
+    # credentials = None
     if credentials is None:
         credentials = get_oauth_credentials()
         store_token(credentials)
@@ -287,29 +293,30 @@ def upload_files(authed_session, album_id, album_name, album_count):
     print("::Uploading files\n")
     for row in l:
         try:
-            smb = os.path.getsize(row[1])
+            file_name = "{}/{}".format(args.imagedir.rstrip('/'), row[1])
+            smb = os.path.getsize(file_name)
             if (args.maxsize != -1) and (smb // 1048576) > args.maxsize:
-                print_message("Skipping large file: {0} - size:{1} (max={2}MB)".format(row[1], smb // 1048576, args.maxsize))
+                print_message("Skipping large file: {0} - size:{1} (max={2}MB)".format(file_name, smb // 1048576, args.maxsize))
             else:
-                print_message("uploading:{0}, {1} to \'{2}\'".format(row[0], row[1], album_name))
-                success, id, album_id = upload_file(authed_session, album_id, row[1])
+                print_message("uploading:{0}, {1} to \'{2}\'".format(row[0], file_name, album_name))
+                success, id, album_id = upload_file(authed_session, album_id, file_name)
                 if success:
                     set_file_status(row[0], id)
                     count += 1
-                    print_message("({0}/{1}) uploaded:: {2}".format(count, len(l), row[1]))
+                    print_message("({0}/{1}) uploaded:: {2}".format(count, len(l), file_name))
                     if album_count + count >= 20000:
                         raise AlbumFullError()
                 else:
-                    print_message("Failed to upload {}".format(row[1]))
+                    print_message("Failed to upload {}".format(file_name))
         except AlbumFullError as e:
             print("Album full - incrementing album name NOW")
             if args.dontincrementalbum:
                 raise CriticalError("Album limit reached but dontincrementalbum flag is set. Cannot continue upload")
             album_id, album_name = increment_album_name(authed_session)
         except IgnoreFileError as e:
-            print("Ignoring file {0} with error: \'{1}\'".format(row[1], e))
+            print("Ignoring file {0} with error: \'{1}\'".format(file_name, e))
         except OSError as e:
-            print("Skipping: OSError ignored for file: {0}. Error:{1}").format(row[1], e)
+            print("Skipping: OSError ignored for file: {0}. Error:{1}".format(file_name, e))
         except UploadError as e:
             raise e
 
@@ -382,6 +389,10 @@ def read_credentials():
 
 def main():
 
+    if args.get_credentials:
+        get_oauth_credentials()
+        exit()
+
     if args.listalbums:
         authed_session = get_authed_session()
         list_albums(authed_session)
@@ -418,9 +429,11 @@ def main():
 
 # region Command line options
 
-parser = argparse.ArgumentParser(description="A collection of utilities for C2S")
+parser = argparse.ArgumentParser(description="Command line upload to GooglePhotos")
 
-parser.add_argument("-i", "--imagedir", default="/media/jacques/FILESTORE/Pictures", help="Specify root image directory")
+
+parser.add_argument("-gc", "--get_credentials", action="store_true", help="Obtains new OAuth credentials and saves them. Other parameters are ignored.")
+parser.add_argument("-i", "--imagedir", default="/media/jvn/FILESTORE/Pictures", help="Specify root image directory")
 parser.add_argument("-a", "--albumname", default="Backup from Local", help="Specify Google Photos album")
 parser.add_argument("-x", "--dontincrementalbum", action="store_true", help="Auto increment album name for large albums")
 parser.add_argument("-c", "--check", action="store_true",

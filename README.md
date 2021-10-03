@@ -18,14 +18,24 @@ To avoid having to re-authenticate with Google all the time, the application exp
 available in a local file. The default file name is _credentials.json_
 
 The method for obtaining the credentials are described here - https://www.syncwithtech.org/authorizing-google-apis/
+Run the script with option -gc to obtain new OAuth credentials via the command line.
 
-Folders (image directory) are set to default values but can be overridden on the command line
+Folders (image directory) are set to default values but can be overridden on the command line.
+The root folder for media (IMAGEDIR) is NOT saved in the database, but only read from the command line. This means that
+if you want to change the root folder you can do so via configuration only. Folder below the root ARE stored in the 
+database. For example: if the root folder is "PICTURES", and you add an image with path "PICTURES/October/100.JPG" then
+the image's local path will be stored as "October/100.JPG" in the database. The combination of IMAGEDIR and localpath is
+used to locate files that will be uploaded.
 
 ## Usage
 usage: gp.py [-h] [-i IMAGEDIR] [-a ALBUMNAME] [-x] [-c] [-u] [-v] [-m MAXSIZE]
 
  -h, --help            show this help message and exit
- 
+
+  -gc, --get_credentials
+                        Obtains new OAuth credentials and saves them. Other
+                        parameters are ignored.
+
   -i IMAGEDIR, --imagedir IMAGEDIR 
                         Specify root image directory
                         
@@ -47,13 +57,19 @@ usage: gp.py [-h] [-i IMAGEDIR] [-a ALBUMNAME] [-x] [-c] [-u] [-v] [-m MAXSIZE]
                         Max file size to upload (MB), default=-1 (no limit)
 
 __Example:__
+
+Basic usage patter is as follows:
+- Run the script to create a list of all files to be uploaded (/.gp.py -v)
+- Run the script to upload each file in the database (.gp.py -u)
  
 To upload all JPG files in the default image folder that are small 
 than 10MB, and with verbose output, use:
- `python ./gp.py -u -v -m 10`
+    python ./gp.py -u -v -m 10
 
 To update the database of all files that must be uploaded, showing verbose 
-messages use: `python ./gp.py -c -v`
+messages use: 
+    python ./gp.py -c -v
+
 
 __Notes:__
 - The script will ONLY upload files with a JPG extension (it is not case sensitive).

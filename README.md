@@ -8,9 +8,10 @@ to Google Drive.
 ## Deployment
 This is a command line tool.
 Download and create a virtual environment:
-- mkvirtualenv -p python3 googlephotos (_or any other name_)
-- pip install -r requirements.txt
-- python ./gp.py -?
+
+    mkvirtualenv -p python3 googlephotos (_or any other name_)
+    pip install -r requirements.txt
+    python ./gp.py -?
 
 
 ## Configuration
@@ -64,10 +65,12 @@ Basic usage patter is as follows:
  
 To upload all JPG files in the default image folder that are small 
 than 10MB, and with verbose output, use:
+
     python ./gp.py -u -v -m 10
 
 To update the database of all files that must be uploaded, showing verbose 
 messages use: 
+
     python ./gp.py -c -v
 
 

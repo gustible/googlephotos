@@ -12,7 +12,8 @@ Download and create a virtual environment:
     mkvirtualenv -p python3 googlephotos (_or any other name_)
     pip install -r requirements.txt
     python ./gp.py -?
-
+    
+*Note: On on Windows use Python 3.8 version max to avoid legacy-install-failure error while trying to install package `cffi`*
 
 ## Configuration
 To avoid having to re-authenticate with Google all the time, the application expects credentials to be

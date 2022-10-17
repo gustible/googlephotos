@@ -53,7 +53,7 @@ def create_database_structure():
     """
     sql = "create table if not exists imagelist(localpath, google_id, dateuploaded)"
     connsql.execute(sql)
-    sql = "create table if not exists albumname(album_name, increment)"
+    sql = "create table if not exists albumname(album_name, increment, google_id)"
     connsql.execute(sql)
     sql = "create table if not exists token(token, refresh_token, token_uri, " \
           "client_id, client_secret, datesaved)"

@@ -398,6 +398,7 @@ def main():
         list_albums(authed_session)
 
     if args.check:
+        create_database_structure()
         check_files(args.imagedir)
 
     if args.upload:

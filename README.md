@@ -28,6 +28,15 @@ database. For example: if the root folder is "PICTURES", and you add an image wi
 the image's local path will be stored as "October/100.JPG" in the database. The combination of IMAGEDIR and localpath is
 used to locate files that will be uploaded.
 
+## Credentials
+Follow those steps to download the credentials required:
+
+1. Create project on google cloud
+2. Enable Google Photos Library API for this project: go to https://developers.google.com/photos/library/guides/get-started then click button "Enable the Google Photos Library API"
+3. For "Configure OAuth client" screen select ~~"Installed Application"~~ "Desktop app"
+4. Download client configuration and place this file `credentials.json` at project root (optional: store client_id and client_secret somewhere safe)
+5. Run `python ./gp.py --get_credentials`, open link in web browser then paste Authorization code back in console
+
 ## Usage
 usage: gp.py [-h] [-i IMAGEDIR] [-a ALBUMNAME] [-x] [-c] [-u] [-v] [-m MAXSIZE]
 
